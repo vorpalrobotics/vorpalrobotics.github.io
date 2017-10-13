@@ -883,6 +883,39 @@
 
     };
 
+    ext.setservo = function(port,pos,callback) {
+        console.log("setservo");
+
+        var cmd = new Uint8Array(5);
+
+        cmd[0] = "S".charCodeAt();    // code for SETLEG command, high bit on
+
+	if (port > 15) {
+		port = 15;
+	} else if (port < 0) {
+		port = 0;
+	}
+
+	cmd[2] = port;
+
+        if (pos > 180) {
+            pos = 180;
+        } else if (pos < 1) {
+            pos = 1;
+        }
+
+	cmd[3] = pos;
+
+	window.setTimeout(function() {
+            callback();
+        }, wtime*1000);
+
+	setSimpleCommand(cmd.buffer);
+
+        console.log("setknees " + legs + " " + kneepos);
+
+    };
+
     ext.setknees = function(legs,kneepos,wtime,callback) {
         console.log("setknees");
 
@@ -1078,10 +1111,11 @@
             ["w", "Walk %m.gait %m.direction %n seconds", "walk", "normal", "forward", 1],
             ["w", "Dance %m.dancemove %n seconds", "dance", "twist", 1],
             ["w", "Fight with arms %m.armfightstyle %m.armfightmove %n seconds", "fightarms", "single arms", "defend", 0.2],
-            ["w", "fight adjust %m.fightadjust %n seconds", "fightadjust", "square up", 0.2],
+            ["w", "Fight adjust %m.fightadjust %n seconds", "fightadjust", "square up", 0.2],
             ["w", "Set Legs: %m.legs hips: %n knees: %n options: %m.legopts %n seconds", "setleg", "all", "90", "90", "mirror hips", 0.2],
             ["w", "Set Hips: %m.legs %n options: %m.legopts %n seconds", "sethips", "all", "90", "mirror hips", 0.2],
             ["w", "Set Knees: %m.legs %n %n seconds", "setknees", "all", "90", 0.2],
+            //["w", "Set Servo: port: %n pos: %n", "setservo", "12", "90", 0.0],
             ["w", "Stand Still: %m.standstyle %n seconds", "standstill", "normal", 1],
             ["w", "Beep frequency: %n seconds: %n", "beep", "300", "0.3"],
             ["r", "Sensor: %m.sensors", "readsensor", "Analog 3"],
