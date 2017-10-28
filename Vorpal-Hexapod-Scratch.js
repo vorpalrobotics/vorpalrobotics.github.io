@@ -883,12 +883,25 @@
 
     };
 
-    ext.setservo = function(port,pos,callback) {
+    ext.setservo = function(port,postype,pos,wtime,callback) {
         console.log("setservo");
 
-        var cmd = new Uint8Array(5);
+        var cmd = new Uint8Array(18);
 
-        cmd[0] = "S".charCodeAt();    // code for SETLEG command, high bit on
+        cmd[0] = "R".charCodeAt();    // "R" is for Raw Servo mode
+
+        switch (postype) {
+            default:
+            case "=":
+                cmd[1] = Number(0); 
+                break;
+            case "+":
+                cmd[1] = Number(1);    
+                break;
+            case "-":
+                cmd[1] = Number(2);    
+                break;
+	}
 
 	if (port > 15) {
 		port = 15;
@@ -896,15 +909,23 @@
 		port = 0;
 	}
 
-	cmd[2] = port;
+	for (var i = 2; i < 18; i++) {
+		cmd[i] = 255;	// default is no move
+	}
+	console.log("4");
 
-        if (pos > 180) {
+        if (pos > 180 && pos < 254) {	// 255 means "no move" and 254 means "detach"
             pos = 180;
+	} else if (pos > 255) {
+		pos = 255;
         } else if (pos < 1) {
             pos = 1;
         }
+	console.log("5");
 
-	cmd[3] = pos;
+	cmd[port+2] = pos;
+
+	console.log("Set cmd port " + port + " to " + pos);
 
 	window.setTimeout(function() {
             callback();
@@ -912,7 +933,7 @@
 
 	setSimpleCommand(cmd.buffer);
 
-        console.log("setknees " + legs + " " + kneepos);
+        console.log("sent setservo " + port + " " + pos);
 
     };
 
@@ -1108,6 +1129,7 @@
 
     var descriptor = {
         blocks: [
+            ["w", "Wait for Connection", "waitforconnection"],
             ["w", "Walk %m.gait %m.direction %n seconds", "walk", "normal", "forward", 1],
             ["w", "Dance %m.dancemove %n seconds", "dance", "twist", 1],
             ["w", "Fight with arms %m.armfightstyle %m.armfightmove %n seconds", "fightarms", "single arms", "defend", 0.2],
@@ -1115,14 +1137,13 @@
             ["w", "Set Legs: %m.legs hips: %n knees: %n options: %m.legopts %n seconds", "setleg", "all", "90", "90", "mirror hips", 0.2],
             ["w", "Set Hips: %m.legs %n options: %m.legopts %n seconds", "sethips", "all", "90", "mirror hips", 0.2],
             ["w", "Set Knees: %m.legs %n %n seconds", "setknees", "all", "90", 0.2],
-            //["w", "Set Servo: port: %n pos: %n", "setservo", "12", "90", 0.0],
+	    ["w", "Set Servo: port: %n %m.postype %n %n seconds", "setservo", "12", "=", "90", 0.0],
             ["w", "Stand Still: %m.standstyle %n seconds", "standstill", "normal", 1],
             ["w", "Beep frequency: %n seconds: %n", "beep", "300", "0.3"],
             ["r", "Sensor: %m.sensors", "readsensor", "Analog 3"],
             ["r", "CMUcam5: %m.cmucam5vals", "readcmucam5", "x"],
             [" ", "Record Start: %m.matrix %m.dpad", "recordstart", "Walk 1", "forward"],
             [" ", "Record End", "recordend"],
-            ["w", "Wait for Connection", "waitforconnection"],
 
         ],
 
@@ -1154,6 +1175,8 @@
         matrix: ["Walk 1", "Walk 2", "Walk 3", "Walk 4", "Dance 1", "Dance 2", "Dance 3", "Dance 4", "Fight 1", "Fight 2", "Fight 3", "Fight 4"],
 
         dpad: ["nothing pressed", "forward", "backward", "left", "right", "special"],
+
+	postype: ["=", "+", "-"],
       },
       url: "http://www.vorpalrobotics.com/wiki/index.php?title=Vorpal_Combat_Hexapod_Scratch_Programming"
     };
