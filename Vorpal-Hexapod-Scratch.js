@@ -4,23 +4,24 @@
 //
 // This work is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License.
 // To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/4.0/.
-// Attribution for derivations of this work should be made to: Vorpal Robotics, LLC
+// Attribution for derivations of this work should be made to: Vorpal Robotics, LLC, vorpalrobotics.com
 //
 
 (function(ext) {
     var device = null;
     var rawData = null;
+    var Recording = 0;	// 1 if we're recording, 0 otherwise
     var trace = 0;    // make this nonzero to trace data packet reception
 
     //
     // finite state machine for input processing
     //
     const ST_START     = 0;    // waiting for start of a new packet
-    const ST_COM     = 1;    // stripping comments until next newline
-    const ST_WAIT_1     = 2;    // waiting for a "1" version number
-    const ST_WAIT_LEN    = 3;    // waiting for the payload length byte
-    const ST_PAYLOAD    = 4;    // reading the payload
-    const ST_WAIT_CS    = 5;    // waiting for the checksum
+    const ST_COM       = 1;    // stripping comments until next newline
+    const ST_WAIT_1    = 2;    // waiting for a "1" version number
+    const ST_WAIT_LEN  = 3;    // waiting for the payload length byte
+    const ST_PAYLOAD   = 4;    // reading the payload
+    const ST_WAIT_CS   = 5;    // waiting for the checksum
 
     var InputState = ST_START;
     var packetLength = 0;
@@ -35,7 +36,7 @@
     var SensorA7 = 0;
     var SensorDistance = 0;
 
-    // cmucam5 support
+    // cmucam5 support  CURRENTLY EXPERIMENTAL
     var SensorPixySignature = -1;
     var SensorPixyX = -1;
     var SensorPixyY = -1;
@@ -45,9 +46,9 @@
     ext.resetAll = function(){};
 
     function appendBuffer( buffer1, buffer2 ) {
-    if (buffer1 == null) {
-        return new Uint8Array(buffer2);
-    }
+        if (buffer1 == null) {
+            return new Uint8Array(buffer2);
+        }
         var tmp = new Uint8Array( buffer1.byteLength + buffer2.byteLength );
         tmp.set( new Uint8Array( buffer1 ), 0 );
         tmp.set( new Uint8Array( buffer2 ), buffer1.byteLength );
@@ -75,18 +76,22 @@
     var cb = new Uint8Array(cmdbuf);
     // add four bytes for V1 header, length, and checksum
     // and add one more byte for "S" sensor request at end
-    var c = new Uint8Array(5+cb.length);
+    // if we're not recording
+
+    var c = new Uint8Array(4+(1-Recording)+cb.length);
 
     c[0] = "V".charCodeAt();
     c[1] = "1".charCodeAt();
-    c[2] = cb.length+1;        // going to add a sensor request "S" at the end
-    var checksum = cb.length+1;
+    c[2] = cb.length+(1-Recording);        // going to add a sensor request "S" at the end if not recording
+    var checksum = c[2]; //WAS cb.length+1;
     for (var i = 0; i < cb.length; i++) {
         c[3+i] = cb[i];
         checksum += cb[i];
     }
-    c[cb.length+3] = "S".charCodeAt();    // sensor read request
-    checksum += c[cb.length+3];
+    if (Recording == 0) {
+        c[cb.length+3] = "S".charCodeAt();    // sensor read request
+        checksum += c[cb.length+3];
+    }
 
     checksum = checksum%256;
 
@@ -115,14 +120,22 @@
         }
         device.set_receive_handler(function(data) {
             if (trace) console.log("RCV:BYTELEN=" + data.byteLength);
-        rawData = appendBuffer(rawData, data);
+            rawData = appendBuffer(rawData, data);
             processData();
 
         });
-    if (deviceOpenedNotify != null) {
-        deviceOpenedNotify();
-        deviceOpenedNotify = null;
-    }
+        if (deviceOpenedNotify != null) {
+/////////////////////////////////////////////////
+       // window.setTimeout(function() {
+           //deviceOpenedNotify();
+           // deviceOpenedNotify = null;
+	    //console.log("WAITED FOR CLEAR");
+       // }, 2500);
+
+/////////////////////////////////////////////////
+            deviceOpenedNotify();
+            deviceOpenedNotify = null;
+        }
 
     console.log("SET RCV DATA HANDLER");
     //
@@ -131,16 +144,20 @@
 
     if (poller == null) {
         poller = setInterval(function() {
-                if (device != null) {
-        if (curCmdRec != null) {
+         if (device != null) {
+          if (curCmdRec != null) {
             // we have a record command, send that first
             device.send(curCmdRec.buffer);
             // these only get sent once
-	    console.log("POLLER SENT REC len=" + curCmdRec.length);
+	    if (curCmdRec[2] == 'S') {
+	        console.log("POLLER SENT REC len=" + curCmdRec.length);
+	    } else {
+	        console.log("POLLER SENT REC STOP len=" + curCmdRec.length);
+            }
             curCmdRec = null;
-        }
-                if (curCmd != null) {
-                    device.send(curCmd.buffer);
+          }
+          if (curCmd != null) {
+            device.send(curCmd.buffer);
             console.log("POLLER SENT CMD len=" + curCmd.length);
             // if it's a beep command, we will not retransmit
             if (curCmd.length > 3 && curCmd[3] == "B".charCodeAt()) {
@@ -149,8 +166,8 @@
             }
                 }
             }
-        //console.log("sent ping");
-    }, 100);  // for debugging slow it down from 100 ms to 2000 ms
+          //console.log("sent ping");
+        }, 100);  // for debugging slow it down from 100 ms to 2000 ms
     }
 
     if (0) {  // for now we're just going to take the lowest com port and hope for the best
@@ -185,9 +202,19 @@
         console.log("STARTSERIAL");
     };
 
+    function bin2string(array){
+        if (array == null) {
+            return String("null");
+        }
+	var result = "";
+	for(var i = 0; i < array.length; ++i){
+		result += (String.fromCharCode(array[i]));
+	}
+	return result;
+     }
+
 
     function processData() {
-
 
         while (rawData != null && rawData.length > 0) {
             var b = rawData[0];
@@ -207,7 +234,7 @@
 		} else if (b == 10 || b == 13) { // carraige return or newline
 			// do nothing, ignore it
                 } else {
-                    console.log("RCV:ERR:ST:"+b);
+                    console.log("RCV:ERROR:ST_START:"+b+"["+String.fromCharCode(b)+"]");
                 }
                 break;
             case ST_WAIT_1:
@@ -215,7 +242,7 @@
                     InputState = ST_WAIT_LEN;
                     if (trace) console.log("RCV:1");
                 } else {
-                    console.log("RCV:ERR:W1:"+b);
+                    console.log("RCV:ERROR:ST_WAIT_1:"+b+"["+String.fromCharCode(b)+"]");
                     // error so return to start state
                     InputState = ST_START;
                 }
@@ -226,15 +253,22 @@
                 if (b == 10 || b == 13) {     // newline ascii code is 10, CR is 13
                     InputState = ST_START;
                     if (curComment != null) {
-                        if (trace) console.log("#" + bin2String(curComment));
+                        console.log("#" + bin2String(curComment));
                         curComment = null;
                     }
                 } else {
                     // append the character to the current comment
                     // and we'll console.log it when its all received
-                    var newbyte = new Uint8Array(1);
-                    newbyte[0] = b;
-                    curComment = appendBuffer(curComment, newbyte);
+
+                    if (curComment == null) {
+                       curComment = new Uint8Array(1);
+                       curComment[0] = b;
+                    } else {
+                       var tmp = new Uint8Array(curComment.length+1);
+                       tmp.set(curComment, 0);
+                       tmp[curComment.length] = b;
+                       curComment = tmp;
+                    }
                 }
                 break;
 
@@ -253,7 +287,7 @@
                 if (packetReceived == packetLength) {
                     // we got it all!
                     InputState = ST_WAIT_CS;
-                    //console.log("RCV:incoming packet is complete");
+                    if (trace) console.log("RCV:incoming packet is complete");
                 }
                 break;
 
@@ -272,7 +306,7 @@
                     // we got a complete sensor data packet and it
                     // passes checksum! Cool beans!
                     // Now set the sensor values from the packet data
-                    //console.log("RCV:Checksum is good");
+                    if (trace) console.log("RCV:Checksum is good");
                     if (packetLength == 8) {
                         // prototype hard codes 8 bytes
                         SensorA3 = packetData[0]*256+packetData[1];
@@ -297,7 +331,7 @@
                             SensorPixyHeight = -1;
                         }
                     } else {
-                        console.log("RCV:Expected 8 byte payload, got "+packetLength);
+                        console.log("RCV:ERROR:Expected 8 byte payload, got "+packetLength);
                     }
                     InputState = ST_START;    // ready for next packet
                 }
@@ -341,18 +375,14 @@
 
     ext._stop = function() {
         console.log("stop command received");
-    curCmd = null;
-    curCmdRec = null;
-    //curRecCmd = new Uint8Array(5);
-    //curRecCmd[0] = "R".charCodeAt();
-    //curRecCmd[1] = "1".charCodeAt();
-    //curRecCmd[2] = curRecCmd[3] = curRecCmd[4] = "S".charCodeAt();
+        curCmd = null;
+        curCmdRec = null;
     };
 
     ext._getStatus = function() {
         if(!device) return {status: 1, msg: "Vorpal Gamepad disconnected"};
         return {status: 2, msg: "Vorpal Gamepad connected"};
-    //add this back later:
+        //add this back some day:
         //if(watchdog) return {status: 1, msg: "Vorpal Searching for Gamepad"};
     };
 
@@ -410,12 +440,12 @@
 
         }
 
-    window.setTimeout(function() {
+        window.setTimeout(function() {
             callback();
         }, wtime*1000);
 
         //curCmd = new Uint8Array(cmd.buffer);
-    setSimpleCommand(cmd.buffer);
+        setSimpleCommand(cmd.buffer);
 
         console.log("sent walk " + ingait + " " + indir );
     };
@@ -433,25 +463,25 @@
         switch (style) {
             default:
             case "normal":
-        cmd[0] = "W".charCodeAt();
+                cmd[0] = "W".charCodeAt();
                 cmd[1] = "1".charCodeAt();
                 cmd[2] = "s".charCodeAt();
                 break;
             case "tiptoes":
-        cmd[0] = "D".charCodeAt();
+                cmd[0] = "D".charCodeAt();
                 cmd[1] = "2".charCodeAt();
                 cmd[2] = "s".charCodeAt();
-        break;
+                break;
             case "floor":
-        cmd[0] = "S".charCodeAt();
+                cmd[0] = "S".charCodeAt();
                 cmd[1] = "1".charCodeAt();
                 cmd[2] = "s".charCodeAt();
-        break;
-        case "foldup":
-        cmd[0] = "S".charCodeAt();
+                break;
+            case "foldup":
+                cmd[0] = "S".charCodeAt();
                 cmd[1] = "2".charCodeAt();
                 cmd[2] = "s".charCodeAt();
-        break;
+                break;
     }
 
     window.setTimeout(function() {
@@ -459,8 +489,8 @@
         }, wtime*1000);
 
     setSimpleCommand(cmd.buffer);
-        console.log("sent stand still " + style);
-    };
+    console.log("queued stand still " + style);
+};
 
     ext.dance = function(dancemove, wtime, callback) {
         console.log("dance");
@@ -476,7 +506,7 @@
                 cmd[1] = "1".charCodeAt();
                 cmd[2] = "f".charCodeAt();
                 break;
-        case "twist on floor":
+            case "twist on floor":
                 cmd[1] = "1".charCodeAt();
                 cmd[2] = "b".charCodeAt();
                 break;
@@ -537,20 +567,20 @@
                 cmd[1] = "3".charCodeAt();
                 cmd[2] = "r".charCodeAt();
                 break;
-        case "stop":
+            case "stop":
                 cmd[1] = "3".charCodeAt();
                 cmd[2] = "s".charCodeAt();
                 break;
 
         }
 
-    window.setTimeout(function() {
+        window.setTimeout(function() {
             callback();
         }, wtime*1000);
 
         //curCmd = new Uint8Array(cmd.buffer);
-    setSimpleCommand(cmd.buffer);
-        console.log("sent dance " + dancemove);
+        setSimpleCommand(cmd.buffer);
+        console.log("queued dance " + dancemove);
 
     };
 
@@ -608,11 +638,11 @@
         }
 
         //curCmd = new Uint8Array(cmd.buffer);
-    setSimpleCommand(cmd.buffer);
-    window.setTimeout(function() {
+        setSimpleCommand(cmd.buffer);
+         window.setTimeout(function() {
             callback();
         }, wtime*1000);
-        console.log("sent fight adjust " + adjuststyle );
+        console.log("queued fight adjust " + adjuststyle );
     };
 
     ext.fightarms = function(fightstyle,fightmove,wtime,callback) {
@@ -662,8 +692,8 @@
         }, wtime*1000);
 
         //curCmd = new Uint8Array(cmd.buffer);
-    setSimpleCommand(cmd.buffer);
-        console.log("sent fight " + fightstyle + " " + fightmove);
+        setSimpleCommand(cmd.buffer);
+        console.log("queued fight " + fightstyle + " " + fightmove);
     };
 
 
@@ -680,7 +710,7 @@
             freq = 2000;
         }
 
-    freq = freq + 0;  // convert to integer
+        freq = freq + 0;  // convert to integer
         cmd[1] = freq / 256;
         cmd[2] = freq % 256;
 
@@ -695,16 +725,17 @@
         cmd[3] = duration / 256;
         cmd[4] = duration % 256;
 
-    setSimpleCommand(cmd.buffer);
+        setSimpleCommand(cmd.buffer);
 
-        console.log("sent beep " + freq + " " + duration);
-    window.setTimeout(function() {
-        callback();
-    }, duration);
+        console.log("queued beep " + freq + " " + duration);
+        window.setTimeout(function() {
+           callback();
+        }, duration);
     };
 
     ext.recordend = function(callback) {
         console.log("record end");
+        Recording = 0; // causing errors on the robot right now
 
         var cmd = new Uint8Array(5);
 
@@ -713,9 +744,10 @@
         cmd[2] = "S".charCodeAt();
         cmd[3] = "S".charCodeAt();
         cmd[4] = "S".charCodeAt();
-        console.log("sending RECSTOP");
+
         curCmdRec = new Uint8Array(cmd.buffer);
-        
+        console.log("queued RECSTOP");
+       
 	window.setTimeout(function() {
 		callback();
 	}, 250);	// we want to make sure the record end actually transmits
@@ -724,6 +756,7 @@
 
     ext.recordstart = function(matrix,dpad) {
         console.log("===RECORD START===");
+        //Recording = 1;  // this is an optimization that isn't working right now because of robot protocol issues
 
         var cmd = new Uint8Array(5);
 
@@ -787,28 +820,31 @@
             cmd[4] = "w".charCodeAt();
             break;
         }
-        console.log("sending RECORD START");
+
         curCmdRec = new Uint8Array(cmd.buffer);
+        console.log("queued RECORD START");
     };
 
     ext.waitforconnection = function(callback) {
         console.log("RECONNECT");
-    if (device) {
-        console.log("Stopping and restarting device:" + device.id);
-        device.close();
+        if (device) {
+           console.log("Stopping and restarting device:" + device.id);
+           //device.set_receive_handler(null);
+           //poller = null;
+           device.close();
 
-        // when the device actually completes opening we'll trigger
-        // the Wait block callback
-        deviceOpenedNotify = callback;
-        device.open({ stopBits: 0, bitRate: 9600, ctsFlowControl: 0 }, deviceOpenedCallback);
-    } else {
-        tryNextDevice();
-    }
+           // when the device actually completes opening we'll trigger
+           // the Wait block callback
+           deviceOpenedNotify = callback;
+           device.open({ stopBits: 0, bitRate: 9600, ctsFlowControl: 0 }, deviceOpenedCallback);
+        } else {
+            tryNextDevice();
+        }
 
-};
+    };
 
     ext.sethips = function(legs,hippos,opts,wtime,callback) {
-        console.log("setleg");
+        console.log("sethips");
 
         var cmd = new Uint8Array(5);
 
@@ -881,15 +917,13 @@
             cmd[4] = 1;
         }
 
-    console.log("3");
-
-    window.setTimeout(function() {
+        window.setTimeout(function() {
             callback();
         }, wtime*1000);
 
-    setSimpleCommand(cmd.buffer);
+        setSimpleCommand(cmd.buffer);
 
-        console.log("sethips " + legs + " " + hippos + " " + opts);
+        console.log("queued sethips " + legs + " " + hippos + " " + opts);
 
     };
 
@@ -911,7 +945,7 @@
             case "-":
                 cmd[1] = Number(2);
                 break;
-    }
+         }
 
     if (port > 15) {
         port = 15;
@@ -937,13 +971,13 @@
 
     console.log("Set cmd port " + port + " to " + pos);
 
-    window.setTimeout(function() {
+        window.setTimeout(function() {
             callback();
         }, wtime*1000);
 
-    setSimpleCommand(cmd.buffer);
+        setSimpleCommand(cmd.buffer);
 
-        console.log("sent setservo " + port + " " + pos);
+        console.log("queued setservo " + port + " " + pos);
 
     };
 
@@ -1009,13 +1043,13 @@
         cmd[2] = 255;    // 255 is a special value, here means don't change hip positions;
         cmd[3] = kneepos;
 
+        setSimpleCommand(cmd.buffer);
+
+        console.log("queued setknees " + legs + " " + kneepos);
+
         window.setTimeout(function() {
             callback();
         }, wtime*1000);
-
-        setSimpleCommand(cmd.buffer);
-
-        console.log("setknees " + legs + " " + kneepos);
 
     };
 
@@ -1025,8 +1059,6 @@
         var cmd = new Uint8Array(5);
 
         cmd[0] = "L".charCodeAt();    // code for SETLEG command, high bit on
-
-        console.log("1");
 
         //legs: ["all", "left", "right", "front", "middle", "back", "tripod1", "tripod2", "0", "1", "2", "3", "4", "5"],
         // cmd[1] specifies a bitmask of legs
@@ -1075,8 +1107,6 @@
                 break;
         }
 
-        console.log("2");
-
         if (hippos > 180) {
             hippos = 180;
         } else if (hippos < 0) {
@@ -1100,16 +1130,13 @@
             cmd[4] = 1;
         }
 
-    console.log("3");
+        setSimpleCommand(cmd.buffer);
 
-    window.setTimeout(function() {
+        console.log("queued setleg " + legs + " " + hippos + " " + kneepos + " " + opts);
+
+        window.setTimeout(function() {
             callback();
         }, wtime*1000);
-
-        //curCmd = new Uint8Array(cmd.buffer);
-    setSimpleCommand(cmd.buffer);
-
-        console.log("setleg " + legs + " " + hippos + " " + kneepos + " " + opts);
 
     };
 
@@ -1133,7 +1160,7 @@
 
     var descriptor = {
         blocks: [
-            ["w", "Wait for Connection", "waitforconnection"],
+            ["w", "Reset Connection", "waitforconnection"],
             ["w", "Walk %m.gait %m.direction %n seconds", "walk", "normal", "forward", 1],
             ["w", "Dance %m.dancemove %n seconds", "dance", "twist", 1],
             ["w", "Fight with arms %m.armfightstyle %m.armfightmove %n seconds", "fightarms", "single arms", "defend", 0.2],
@@ -1141,7 +1168,7 @@
             ["w", "Set Legs: %m.legs hips: %n knees: %n options: %m.legopts %n seconds", "setleg", "all", "90", "90", "mirror hips", 0.2],
             ["w", "Set Hips: %m.legs %n options: %m.legopts %n seconds", "sethips", "all", "90", "mirror hips", 0.2],
             ["w", "Set Knees: %m.legs %n %n seconds", "setknees", "all", "90", 0.2],
-        ["w", "Set Servo: port: %n %m.postype %n %n seconds", "setservo", "12", "=", "90", 0.0],
+            ["w", "Set Servo: port: %n %m.postype %n %n seconds", "setservo", "12", "=", "90", 0.0],
             ["w", "Stand Still: %m.standstyle %n seconds", "standstill", "normal", 1],
             ["w", "Beep frequency: %n seconds: %n", "beep", "300", "0.3"],
             ["r", "Sensor: %m.sensors", "readsensor", "Analog 3"],
