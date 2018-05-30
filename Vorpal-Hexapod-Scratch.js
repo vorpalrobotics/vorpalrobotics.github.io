@@ -1,10 +1,16 @@
 // Vorpal Combat Hexapod Control Program For Scratch X V1.0d
 //
-// Copyright (C) 2017 Vorpal Robotics, LLC.
+// Copyright (C) 2017, 2018 Vorpal Robotics, LLC.
+//
+// Version: V1r8j
 //
 // This work is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License.
 // To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/4.0/.
 // Attribution for derivations of this work should be made to: Vorpal Robotics, LLC, vorpalrobotics.com
+// 
+// Visit our wiki for much more info at http://www.vorpalrobotics.com
+//
+// Parts for hexapod and other projects are at our store: http://store.vorpalrobotics.com
 //
 
 (function(ext) {
@@ -46,7 +52,7 @@
     ext.resetAll = function(){};
 
     function appendBuffer( buffer1, buffer2 ) {
-        if (buffer1 == null) {
+        if (buffer1 === null) {
             return new Uint8Array(buffer2);
         }
         var tmp = new Uint8Array( buffer1.byteLength + buffer2.byteLength );
@@ -88,7 +94,7 @@
         c[3+i] = cb[i];
         checksum += cb[i];
     }
-    if (Recording == 0) {
+    if (Recording === 0) {
         c[cb.length+3] = "S".charCodeAt();    // sensor read request
         checksum += c[cb.length+3];
     }
@@ -101,13 +107,16 @@
     }
 
 
-    function bin2String(array) {
-     var result = "";
-     for (var i = 0; i < array.length; i++) {
-       result += String.fromCharCode(array[i]);
-     }
-     return result;
-    }
+    function bin2string(array){
+        if (array === null) {
+            return String("null");
+        }
+	var result = "";
+	for(var i = 0; i < array.length; ++i){
+		result += (String.fromCharCode(array[i]));
+	}
+	return result;
+     };
 
 
     var deviceOpenedNotify = null;
@@ -142,31 +151,26 @@
     // send commands once every 100 ms, same as gamepad
     //
 
-    if (poller == null) {
+    if (poller === null) {
         poller = setInterval(function() {
          if (device != null) {
-          if (curCmdRec != null) {
-            // we have a record command, send that first
-            device.send(curCmdRec.buffer);
-            // these only get sent once
-	    if (curCmdRec[2] == 'S') {
-	        console.log("POLLER SENT REC len=" + curCmdRec.length);
-	    } else {
-	        console.log("POLLER SENT REC STOP len=" + curCmdRec.length);
-            }
-            curCmdRec = null;
+		  if (curCmdRec != null) {
+		    // we have a record command, send that first
+		    device.send(curCmdRec.buffer);
+		    // these only get sent once
+		    console.log("POLLER SENT RECORD COMMAND:" + bin2string(curCmdRec));
+		    curCmdRec = null;
+		  }
+		  if (curCmd != null) {
+			    device.send(curCmd.buffer);
+			    console.log("POLLER SENT CMD len=" + curCmd.length + " " + bin2string(curCmd));
+			    // if it's a beep command, we will not retransmit
+			    if (curCmd.length > 3 && curCmd[3] == "B".charCodeAt()) {
+				curCmd = null;
+				console.log("POLLER Cleared BEEP");
+			    }
+		  }
           }
-          if (curCmd != null) {
-            device.send(curCmd.buffer);
-            console.log("POLLER SENT CMD len=" + curCmd.length);
-            // if it's a beep command, we will not retransmit
-            if (curCmd.length > 3 && curCmd[3] == "B".charCodeAt()) {
-                curCmd = null;
-                console.log("POLLER Cleared BEEP");
-            }
-                }
-            }
-          //console.log("sent ping");
         }, 100);  // for debugging slow it down from 100 ms to 2000 ms
     }
 
@@ -202,8 +206,9 @@
         console.log("STARTSERIAL");
     };
 
+    /*********************************
     function bin2string(array){
-        if (array == null) {
+        if (array === null) {
             return String("null");
         }
 	var result = "";
@@ -211,7 +216,8 @@
 		result += (String.fromCharCode(array[i]));
 	}
 	return result;
-     }
+     };
+     **********************************/
 
 
     function processData() {
@@ -219,7 +225,7 @@
         while (rawData != null && rawData.length > 0) {
             var b = rawData[0];
             rawData = rawData.subarray(1,rawData.length);
-            if (rawData.length == 0) {
+            if (rawData.length === 0) {
                 rawData = null;
             }
 
@@ -253,14 +259,14 @@
                 if (b == 10 || b == 13) {     // newline ascii code is 10, CR is 13
                     InputState = ST_START;
                     if (curComment != null) {
-                        console.log("#" + bin2String(curComment));
+                        console.log("#" + bin2string(curComment));
                         curComment = null;
                     }
                 } else {
                     // append the character to the current comment
                     // and we'll console.log it when its all received
 
-                    if (curComment == null) {
+                    if (curComment === null) {
                        curComment = new Uint8Array(1);
                        curComment[0] = b;
                     } else {
@@ -746,11 +752,35 @@
         cmd[4] = "S".charCodeAt();
 
         curCmdRec = new Uint8Array(cmd.buffer);
-        console.log("queued RECSTOP");
+        console.log("queued record end");
        
-	window.setTimeout(function() {
-		callback();
-	}, 250);	// we want to make sure the record end actually transmits
+	if (0) {
+		window.setTimeout(function() {
+			callback();
+		}, 250);	// we want to make sure the record end actually transmits
+	}
+    };
+
+    ext.eraserecordings = function(callback) {
+        console.log("erase recordings");
+        Recording = 0;
+
+        var cmd = new Uint8Array(5);
+
+        cmd[0] = "R".charCodeAt();
+        cmd[1] = "1".charCodeAt();
+        cmd[2] = "D".charCodeAt();
+        cmd[3] = "D".charCodeAt();
+        cmd[4] = "D".charCodeAt();
+
+        curCmdRec = new Uint8Array(cmd.buffer);
+        console.log("queued erase recordings");
+       
+	if (0) {
+		window.setTimeout(function() {
+			callback();
+		}, 250);	// give time for recordings to actually erase
+	}
     };
 
 
@@ -822,6 +852,8 @@
         }
 
         curCmdRec = new Uint8Array(cmd.buffer);
+	curCmd = null;  // we want to clear any commands in progress before starting the recording
+			// otherwise you could have some leftover command from before that gets recorded by accident.
         console.log("queued RECORD START");
     };
 
@@ -914,7 +946,7 @@
         if (opts == "mirror hips") {
             cmd[4] = 0;
         } else {
-            cmd[4] = 1;
+            cmd[4] = 1;           Serial.print("/"); Serial.print(hipbackward); Serial.print("/"); Serial.println(kneeup,DEC);
         }
 
         window.setTimeout(function() {
@@ -1129,7 +1161,6 @@
         } else {
             cmd[4] = 1;
         }
-
         setSimpleCommand(cmd.buffer);
 
         console.log("queued setleg " + legs + " " + hippos + " " + kneepos + " " + opts);
@@ -1138,6 +1169,123 @@
             callback();
         }, wtime*1000);
 
+    };
+
+
+    function servorange(n) {
+	    if (n > 180) {
+		    return 180;
+	    } else if (n < 0) {
+		    return 0;
+	    } else {
+		    return n;
+	    }
+    }
+
+    // clipservo is like servorange but allows the special values 254 and 255
+    function clipservo(n) {
+	    if (n == 254 || n == 255) {
+		    return n;
+	    }
+	    return servorange(n);
+    }
+
+    ext.gait = function(style, dir, hipfwd, hipback, kneeup, kneedown, sec, wtime, callback) {
+        console.log("gait");
+
+        var cmd = new Uint8Array(9);
+
+        cmd[0] = "G".charCodeAt();    // code for gait command
+
+        console.log("1");
+
+
+        // cmd[1] specifies type of gait
+	// gaitstyle: ["tripod", "turn in place", "ripple", "sidestep"],
+        switch (style) {
+            case "tripod":
+            default:
+                cmd[1] = Number(0);    
+                break;
+            case "turn in place":
+                cmd[1] = Number(1);
+                break;
+            case "ripple":
+                cmd[1] = Number(2);
+                break;
+            case "sidestep":		// DOES NOT WORK YET
+                cmd[1] = Number(3);
+                break;
+        }
+	
+	
+        // cmd[2] specifies forward or reverse direction
+        switch (dir) {
+            case "forward":
+                cmd[2] = Number(0);    
+                break;
+            case "reverse":
+                cmd[2] = Number(1);
+                break;
+        }
+
+        console.log("2");
+
+        cmd[3] = servorange(hipfwd);
+        cmd[4] = servorange(hipback);
+	cmd[5] = servorange(kneeup);
+	cmd[6] = servorange(kneedown);
+
+	console.log("3");
+
+	sec = sec * 1000;  // convert to milliseconds
+	if (sec < 100) {
+		sec = 100;
+	} else if (sec > 30000) {
+		sec = 30000;
+	}
+	// milliseconds could overflow one byte so split it up
+	cmd[7] = sec/256;
+	cmd[8] = sec%256;
+
+	console.log("4");
+
+        window.setTimeout(function() {
+            callback();
+        }, wtime*1000);
+
+        setSimpleCommand(cmd.buffer);
+
+        console.log("queued gait " + style + " " + dir );
+
+    };
+
+    ext.pose = function(s0,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,s11,wtime,callback) {
+        console.log("pose");
+
+        var cmd = new Uint8Array(13);
+
+        cmd[0] = "P".charCodeAt();    // "P" is for Pose all 12 Servos mode
+	cmd[1] = clipservo(s0);
+	cmd[2] = clipservo(s1);
+	cmd[3] = clipservo(s2);
+	cmd[4] = clipservo(s3);
+	cmd[5] = clipservo(s4);
+	cmd[6] = clipservo(s5);
+	cmd[7] = clipservo(s6);
+	cmd[8] = clipservo(s7);
+	cmd[9] = clipservo(s8);
+	cmd[10] = clipservo(s9);
+	cmd[11] = clipservo(s10);
+	cmd[12] = clipservo(s11);
+
+        window.setTimeout(function() {
+            callback();
+        }, wtime*1000);
+
+        setSimpleCommand(cmd.buffer);
+
+        console.log("queued pose ");
     };
 
     ext.readsensor = function(sensor) {
@@ -1161,20 +1309,23 @@
     var descriptor = {
         blocks: [
             ["w", "Reset Connection", "waitforconnection"],
-            ["w", "Walk %m.gait %m.direction %n seconds", "walk", "normal", "forward", 1],
-            ["w", "Dance %m.dancemove %n seconds", "dance", "twist", 1],
-            ["w", "Fight with arms %m.armfightstyle %m.armfightmove %n seconds", "fightarms", "single arms", "defend", 0.2],
-            ["w", "Fight adjust %m.fightadjust %n seconds", "fightadjust", "square up", 0.2],
-            ["w", "Set Legs: %m.legs hips: %n knees: %n options: %m.legopts %n seconds", "setleg", "all", "90", "90", "mirror hips", 0.2],
-            ["w", "Set Hips: %m.legs %n options: %m.legopts %n seconds", "sethips", "all", "90", "mirror hips", 0.2],
-            ["w", "Set Knees: %m.legs %n %n seconds", "setknees", "all", "90", 0.2],
-            ["w", "Set Servo: port: %n %m.postype %n %n seconds", "setservo", "12", "=", "90", 0.0],
-            ["w", "Stand Still: %m.standstyle %n seconds", "standstill", "normal", 1],
+            ["w", "Stand Still: %m.standstyle seconds: %n", "standstill", "normal", 1],
+            ["w", "Walk %m.gait %m.direction seconds: %n", "walk", "normal", "forward", 1],
+            ["w", "Dance %m.dancemove seconds: %n", "dance", "twist", 1],
+            ["w", "Fight with arms %m.armfightstyle %m.armfightmove seconds: %n", "fightarms", "single arms", "defend", 0.2],
+            ["w", "Fight adjust %m.fightadjust seconds: %n", "fightadjust", "square up", 0.2],
+            ["w", "Set Legs: %m.legs hips: %n knees: %n options: %m.legopts seconds: %n", "setleg", "all", "90", "90", "mirror hips", 0.2],
+            ["w", "Set Hips: %m.legs %n options: %m.legopts seconds: %n", "sethips", "all", "90", "mirror hips", 0.2],
+            ["w", "Set Knees: %m.legs %n seconds: %n", "setknees", "all", "90", 0.2],
+            ["w", "Set Servo: port: %n %m.postype %n seconds: %n", "setservo", "12", "=", "90", 0.0],
+	    ["w", "Gait: %m.gaitstyle %m.gaitdir hipsfwd: %n hipsbw: %n kneesup: %n kneesdown: %n cycletime: %n seconds: %n", "gait", "tripod", "forward", 30, 120, 90, 30, 0.8, 1],
+	    ["w", "Pose H0:%n H1:%n H2:%n H3:%n H4:%n H5:%n K6:%n K7:%n K8:%n K9:%n K10:%n K11:%n seconds:%n", "pose", 90,90,90,90,90,90,30,30,30,30,30,30,1.0],
             ["w", "Beep frequency: %n seconds: %n", "beep", "300", "0.3"],
             ["r", "Sensor: %m.sensors", "readsensor", "Analog 3"],
             ["r", "CMUcam5: %m.cmucam5vals", "readcmucam5", "x"],
             [" ", "Record Start: %m.matrix %m.dpad", "recordstart", "Walk 1", "forward"],
-            ["w", "Record End", "recordend"],
+            [" ", "Record End", "recordend"],
+	    [" ", "Erase Recordings", "eraserecordings"],
 
         ],
 
@@ -1197,6 +1348,10 @@
 
         legs: ["all", "left", "right", "front", "middle", "back", "tripod1", "tripod2", "0", "1", "2", "3", "4", "5"],
 
+	gaitdir: ["forward", "reverse"],
+
+	gaitstyle: ["tripod", "turn in place", "ripple" ],	// "sidestep" removed, not ready for prime time
+
         legopts: ["mirror hips", "raw hips"],
 
         sensors: ["Ultrasonic distance", "Analog 3", "Analog 6", "Analog 7"],
@@ -1205,11 +1360,11 @@
 
         matrix: ["Walk 1", "Walk 2", "Walk 3", "Walk 4", "Dance 1", "Dance 2", "Dance 3", "Dance 4", "Fight 1", "Fight 2", "Fight 3", "Fight 4"],
 
-        dpad: ["nothing pressed", "forward", "backward", "left", "right", "special"],
+        dpad: ["forward", "backward", "left", "right", "special"],
 
         postype: ["=", "+", "-"],
       },
-      url: "http://www.vorpalrobotics.com/wiki/index.php?title=Vorpal_Combat_Hexapod_Scratch_Programming"
+      url: "http://www.vorpalrobotics.com/wiki/index.php?title=Vorpal_The_Hexapod_Scratch_Programming"
     };
 
     ScratchExtensions.register("VorpalCombatHexapod", descriptor, ext, {type: "serial"});
