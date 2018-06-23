@@ -64,7 +64,7 @@
     // Extension API interactions
     var potentialDevices = [];
     ext._deviceConnected = function(dev) {
-    console.log("DEV CONNECTED:" + dev.id);
+    console.log("Device Detected:" + dev.id);
         potentialDevices.push(dev);
 
         if (!device) {
@@ -146,7 +146,7 @@
             deviceOpenedNotify = null;
         }
 
-    console.log("SET RCV DATA HANDLER");
+    console.log("Device Open Successful");
     //
     // send commands once every 100 ms, same as gamepad
     //
@@ -197,7 +197,7 @@
 
         device.open({ stopBits: 0, bitRate: 9600, ctsFlowControl: 0 }, deviceOpenedCallback);
 
-        console.log("TRYING DEV: " + device.id);
+        console.log("Opening Device: " + device.id);
 
 
     }
@@ -1190,10 +1190,10 @@
 	    return servorange(n);
     }
 
-    ext.gait = function(style, dir, hipfwd, hipback, kneeup, kneedown, sec, wtime, callback) {
+    ext.gait = function(style, dir, hipfwd, hipback, kneeup, kneedown, lean, sec, wtime, callback) {
         console.log("gait");
 
-        var cmd = new Uint8Array(9);
+        var cmd = new Uint8Array(10);
 
         cmd[0] = "G".charCodeAt();    // code for gait command
 
@@ -1238,6 +1238,15 @@
 
 	console.log("3");
 
+	if (lean < -70) {
+		lean = -70;
+	} else if (lean > 70) {
+		lean = 70;
+	}
+	lean += 70;	// we want it in the range 0 to 140 for transmission
+
+	cmd[7] = lean;
+
 	sec = sec * 1000;  // convert to milliseconds
 	if (sec < 100) {
 		sec = 100;
@@ -1245,8 +1254,8 @@
 		sec = 30000;
 	}
 	// milliseconds could overflow one byte so split it up
-	cmd[7] = sec/256;
-	cmd[8] = sec%256;
+	cmd[8] = sec/256;
+	cmd[9] = sec%256;
 
 	console.log("4");
 
@@ -1318,8 +1327,10 @@
             ["w", "Set Hips: %m.legs %n options: %m.legopts seconds: %n", "sethips", "all", "90", "mirror hips", 0.2],
             ["w", "Set Knees: %m.legs %n seconds: %n", "setknees", "all", "90", 0.2],
             ["w", "Set Servo: port: %n %m.postype %n seconds: %n", "setservo", "12", "=", "90", 0.0],
-	    ["w", "Gait: %m.gaitstyle %m.gaitdir hipsfwd: %n hipsbw: %n kneesup: %n kneesdown: %n cycletime: %n seconds: %n", "gait", "tripod", "forward", 30, 120, 90, 30, 0.8, 1],
-	    ["w", "Pose H0:%n H1:%n H2:%n H3:%n H4:%n H5:%n K6:%n K7:%n K8:%n K9:%n K10:%n K11:%n seconds:%n", "pose", 90,90,90,90,90,90,30,30,30,30,30,30,1.0],
+	    ["w", "Gait: %m.gaitstyle %m.gaitdir hipsfwd: %n hipsbw: %n kneesup: %n kneesdown: %n lean: %n cycletime: %n seconds: %n", "gait", 
+	    		"tripod", "forward", 115, 65, 90, 30, 0, 0.75, 1],
+	    ["w", "Pose H0:%n H1:%n H2:%n H3:%n H4:%n H5:%n K6:%n K7:%n K8:%n K9:%n K10:%n K11:%n seconds:%n", "pose", 
+	    		90,90,90,90,90,90,30,30,30,30,30,30,1.0],
             ["w", "Beep frequency: %n seconds: %n", "beep", "300", "0.3"],
             ["r", "Sensor: %m.sensors", "readsensor", "Analog 3"],
             ["r", "CMUcam5: %m.cmucam5vals", "readcmucam5", "x"],
@@ -1360,7 +1371,7 @@
 
         matrix: ["Walk 1", "Walk 2", "Walk 3", "Walk 4", "Dance 1", "Dance 2", "Dance 3", "Dance 4", "Fight 1", "Fight 2", "Fight 3", "Fight 4"],
 
-        dpad: ["forward", "backward", "left", "right", "special"],
+        dpad: ["forward", "backward", "left", "right", "special", "nothing pressed"],
 
         postype: ["=", "+", "-"],
       },
