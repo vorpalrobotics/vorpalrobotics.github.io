@@ -116,7 +116,7 @@
 		result += (String.fromCharCode(array[i]));
 	}
 	return result;
-     };
+     }
 
 
     var deviceOpenedNotify = null;
@@ -133,7 +133,7 @@
             processData();
 
         });
-        if (deviceOpenedNotify != null) {
+        if (deviceOpenedNotify !== null) {
 /////////////////////////////////////////////////
        // window.setTimeout(function() {
            //deviceOpenedNotify();
@@ -153,15 +153,15 @@
 
     if (poller === null) {
         poller = setInterval(function() {
-         if (device != null) {
-		  if (curCmdRec != null) {
+         if (device !== null) {
+		  if (curCmdRec !== null) {
 		    // we have a record command, send that first
 		    device.send(curCmdRec.buffer);
 		    // these only get sent once
 		    console.log("POLLER SENT RECORD COMMAND:" + bin2string(curCmdRec));
 		    curCmdRec = null;
 		  }
-		  if (curCmd != null) {
+		  if (curCmd !== null) {
 			    device.send(curCmd.buffer);
 			    console.log("POLLER SENT CMD len=" + curCmd.length + " " + bin2string(curCmd));
 			    // if it's a beep command, we will not retransmit
@@ -222,7 +222,7 @@
 
     function processData() {
 
-        while (rawData != null && rawData.length > 0) {
+        while (rawData !== null && rawData.length > 0) {
             var b = rawData[0];
             rawData = rawData.subarray(1,rawData.length);
             if (rawData.length === 0) {
@@ -258,7 +258,7 @@
                 // so flush everything up to a newline
                 if (b == 10 || b == 13) {     // newline ascii code is 10, CR is 13
                     InputState = ST_START;
-                    if (curComment != null) {
+                    if (curComment !== null) {
                         console.log("#" + bin2string(curComment));
                         curComment = null;
                     }
@@ -882,8 +882,6 @@
 
         cmd[0] = "L".charCodeAt();    // code for SETLEG command, high bit on
 
-        console.log("1");
-
         // cmd[1] specifies a bitmask of legs
         switch (legs) {
             case "all":
@@ -930,8 +928,6 @@
                 break;
         }
 
-        console.log("2");
-
         if (hippos > 180) {
             hippos = 180;
         } else if (hippos < 0) {
@@ -946,7 +942,7 @@
         if (opts == "mirror hips") {
             cmd[4] = 0;
         } else {
-            cmd[4] = 1;           Serial.print("/"); Serial.print(hipbackward); Serial.print("/"); Serial.println(kneeup,DEC);
+            cmd[4] = 1;
         }
 
         window.setTimeout(function() {
@@ -1197,16 +1193,9 @@
 
         cmd[0] = "G".charCodeAt();    // code for gait command
 
-        console.log("1");
-
-
         // cmd[1] specifies type of gait
 	// gaitstyle: ["tripod", "turn in place", "ripple", "sidestep"],
         switch (style) {
-            case "tripod":
-            default:
-                cmd[1] = Number(0);    
-                break;
             case "turn in place":
                 cmd[1] = Number(1);
                 break;
@@ -1216,27 +1205,27 @@
             case "sidestep":		// DOES NOT WORK YET
                 cmd[1] = Number(3);
                 break;
+            default:
+            case "tripod":
+                cmd[1] = Number(0);    
+                break;
         }
 	
 	
-        // cmd[2] specifies forward or reverse direction
+        // cmd[2] specifies forward or backward direction
         switch (dir) {
             case "forward":
                 cmd[2] = Number(0);    
                 break;
-            case "reverse":
+            case "backward":
                 cmd[2] = Number(1);
                 break;
         }
-
-        console.log("2");
 
         cmd[3] = servorange(hipfwd);
         cmd[4] = servorange(hipback);
 	cmd[5] = servorange(kneeup);
 	cmd[6] = servorange(kneedown);
-
-	console.log("3");
 
 	if (lean < -70) {
 		lean = -70;
@@ -1256,8 +1245,6 @@
 	// milliseconds could overflow one byte so split it up
 	cmd[8] = sec/256;
 	cmd[9] = sec%256;
-
-	console.log("4");
 
         window.setTimeout(function() {
             callback();
@@ -1359,7 +1346,7 @@
 
         legs: ["all", "left", "right", "front", "middle", "back", "tripod1", "tripod2", "0", "1", "2", "3", "4", "5"],
 
-	gaitdir: ["forward", "reverse"],
+	gaitdir: ["forward", "backward"],
 
 	gaitstyle: ["tripod", "turn in place", "ripple" ],	// "sidestep" removed, not ready for prime time
 
