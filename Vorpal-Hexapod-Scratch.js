@@ -571,7 +571,7 @@
                 break;
             case "wave swirl right":
                 cmd[1] = "3".charCodeAt();
-                cmd[2] = "r".charCodeAt();
+                cmd[2] = "b".charCodeAt();
                 break;
             case "stop":
                 cmd[1] = "3".charCodeAt();
@@ -681,7 +681,7 @@
             cmd[2] = "f".charCodeAt();
             break;
         case "downsweep":
-            cmd[2] = "d".charCodeAt();
+            cmd[2] = "b".charCodeAt();
             break;
         case "auto ninja":
             cmd[2] = "w".charCodeAt();
@@ -722,7 +722,9 @@
 
         if (duration > 30) {
             duration = 30;    // maximum time for tone in seconds
-        }
+        } else if (duration < 1) {
+		duration = 1;
+	}
         // conver to milliseconds
         duration = (duration + 0);  // convert to integer
         duration *= 1000;
@@ -1342,7 +1344,7 @@
 
         armfightmove: ["defend", "lefthook", "righthook", "uppercut", "downsweep", "auto ninja"],
 
-        fightadjust: ["square up", "thrust forward", "thrust backward", "lean left", "lean right", "lean forward", "lean back upward", "twist hips right", "twist hips left", "freeze in place"],
+        fightadjust: ["square up", "thrust forward", "thrust backward", "lean left", "lean right", "lean forward", "lean backward", "twist hips right", "twist hips left", "freeze in place"],
 
         legs: ["all", "left", "right", "front", "middle", "back", "tripod1", "tripod2", "0", "1", "2", "3", "4", "5"],
 
