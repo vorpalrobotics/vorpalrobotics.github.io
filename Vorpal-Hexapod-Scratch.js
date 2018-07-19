@@ -146,7 +146,7 @@
             deviceOpenedNotify = null;
         }
 
-    console.log("Device Open Successful");
+    console.log("Open Successful: " + device.id);
     //
     // send commands once every 100 ms, same as gamepad
     //
